@@ -1,29 +1,34 @@
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
 from geometry_msgs.msg import TransformStamped
+from sensor_msgs.msg import Image
 import tf2_ros
 from visualization_msgs.msg import Marker, MarkerArray
-from ultralytics import YOLO
+from ultralytics import YOLO, solutions
+from cv_bridge import CvBridge
+from PIL import Image as Im
+import pyrealsense2 as rs
+
 
 class YoloNode(Node):
     def __init__(self):
         super().__init__('yolo_node')
-        # Subscriptions for image and depth topics
+       
         self.image_subscription = self.create_subscription(Image, 'camera/camera/color/image_raw', self.image_callback, 10)
         self.depth_subscription = self.create_subscription(Image, 'camera/camera/depth/image_rect_raw', self.depth_callback, 10)
-        # Bridge to convert ROS images to OpenCV format
+
         self.br = CvBridge()
-        # Broadcaster for publishing transforms
+       
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
-        # Publisher for visual markers
+        
         self.marker_publisher = self.create_publisher(MarkerArray, '/yolo_markers', 10)
+        self.image_publisher = self.create_publisher(Image, '/annotations', 10)
         
         # Load the YOLO model
-        self.yolo_model = YOLO('/home/ninad/Downloads/best_landolts.pt')
+        self.yolo_model = YOLO('/home/ninad/Downloads/omni_points.pt')
         self.depth_image = None
         self.get_logger().info('YOLO Node has been started.')
 
@@ -34,18 +39,18 @@ class YoloNode(Node):
         if self.depth_image is not None:
             # Log depth image dimensions
             height, width = self.depth_image.shape[:2]
-            self.get_logger().info(f'Depth image dimensions: {height}x{width}')
+            #self.get_logger().info(f'Depth image dimensions: {height}x{width}')
 
     def image_callback(self, msg):
         color_image = self.br.imgmsg_to_cv2(msg, 'bgr8')
         
         results = self.yolo_model.predict(color_image)
-        boxes = results[0].boxes  # Assuming single image
+        print(results)
+        boxes = results[0].boxes
 
-        # Assuming a fixed depth or scale factor for distance estimation
-        fixed_depth = 1.0 # Example: Assuming all objects are approximately 2 meters away
+        # Assuming a fixed depth for distance estimation
+        fixed_depth = 1.0
 
-        # Initialize marker_array to store markers
         marker_array = MarkerArray()
 
         for idx, box in enumerate(boxes):
@@ -60,8 +65,8 @@ class YoloNode(Node):
             # Use a fixed depth value for demonstration
             z = fixed_depth
 
-            fx = 600.0  # Adjust according to your camera's parameters
-            fy = 600.0  # Adjust according to your camera's parameters
+            fx = 616.178588867188 
+            fy = 616.587158203125
             cx = color_image.shape[1] / 2
             cy = color_image.shape[0] / 2
 
@@ -86,9 +91,9 @@ class YoloNode(Node):
 
             # Calculate distance between camera_link and object_{idx}
             distance = np.sqrt(x**2 + y**2 + z**2)
-            self.get_logger().info(f'Distance between camera_link and object_{idx}: {distance} meters')
+            self.get_logger().info(f'Distance between camera_link and object_{idx}: {distance} meters') # Attention, z values are from fixwd depthand not actual depth
 
-            # Create a marker for visualization
+            # Marker for visualization
             marker = Marker()
             marker.header.frame_id = 'camera_link'
             marker.header.stamp = self.get_clock().now().to_msg()
@@ -105,44 +110,35 @@ class YoloNode(Node):
             marker.pose.orientation.w = 1.0
             marker.scale.x = float((xmax - xmin) * z / fx)
             marker.scale.y = float((ymax - ymin) * z / fy)
-            marker.scale.z = 0.1  # Arbitrary depth for the marker
-            marker.color.a = 0.7  # Transparency
+            marker.scale.z = 0.1 
+            marker.color.a = 0.7  
             marker.color.r = 1.0
             marker.color.g = 0.0
             marker.color.b = 0.0
             marker_array.markers.append(marker)
+            # Publish the marker array
+            self.marker_publisher.publish(marker_array)
+        
+        # Publisher for annotated images
+        
+        cv_image = self.br.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        
+        results = self.yolo_model(cv_image)  # Perform the inference
+        
+        annotated_image = results[0]  # Get the annotated image from the first result
+        im_array = annotated_image.plot()
+        image_msg = Im.fromarray(im_array[..., ::-1])
+        ##!!!!!Convert Pillow Image back to CV2 or Image_msg
+        numpy_array = np.array(image_msg)
+        image_msg = self.br.cv2_to_imgmsg(numpy_array, encoding='bgr8')
 
-            # Define the desired TCP position relative to the object
-            tcp_offset_z = 0.2  # Example offset, 0.5 meters in front of the object
-            tcp_x = x
-            tcp_y = y
-            tcp_z = z + tcp_offset_z
-
-            # Create a transform stamped message for the TCP
-            tcp_transform = TransformStamped()
-            tcp_transform.header.stamp = self.get_clock().now().to_msg()
-            tcp_transform.header.frame_id = 'camera_link'
-            tcp_transform.child_frame_id = 'tcp'
-            tcp_transform.transform.translation.x = float(tcp_x)
-            tcp_transform.transform.translation.y = float(tcp_y)
-            tcp_transform.transform.translation.z = float(tcp_z)
-            tcp_transform.transform.rotation.x = 0.0
-            tcp_transform.transform.rotation.y = 0.0
-            tcp_transform.transform.rotation.z = 0.0
-            tcp_transform.transform.rotation.w = 1.0
-
-            # Broadcast the transform for the TCP
-            self.tf_broadcaster.sendTransform(tcp_transform)
-
-        # Publish the marker array
-        self.marker_publisher.publish(marker_array)
+        # Publish the annotated image
+        self.image_publisher.publish(image_msg)
 
 
-
-
+            
 
 def main(args=None):
-    # Main function to initialize and spin the ROS node
     rclpy.init(args=args)
     node = YoloNode()
     rclpy.spin(node)
@@ -151,3 +147,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+
