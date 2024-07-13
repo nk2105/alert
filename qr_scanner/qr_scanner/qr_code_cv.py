@@ -10,6 +10,7 @@ class QrCodeDetect(Node):
 
         self.create_subscription(Image, 'camera/camera/color/image_raw', self.camera_cb, 1)
         self.qreader = cv2.QRCodeDetector()
+        self.val =[]
         self.timer = self.create_timer(1.0, self.timer_cb)
 
     def camera_cb(self, msg):
@@ -58,3 +59,4 @@ def main(args=None):
 
 if __name__ == "__main__":
     main()
+
