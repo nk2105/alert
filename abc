@@ -1,1 +1,2 @@
-webexteams://im?space=136019c1-3483-11ef-8ee2-8d8300821bb1&message=68f2c130-4130-11ef-8920-f5dc454ca4ed
+pip3 uninstall qreader
+pip3 install git+https://github.com/RRL-ALeRT/QReader_openvino
