@@ -53,11 +53,11 @@ class MagnetometerNode(Node):
         marker.pose.position.x = 1.0
         marker.pose.position.y = 1.0
         marker.pose.position.z = 1.0
-        marker.scale.z = 0.5  # Height of the text
+        marker.scale.z = 0.5  
         marker.color.r = 1.0
         marker.color.g = 0.0
         marker.color.b = 0.0
-        marker.color.a = 1.0  # Alpha
+        marker.color.a = 1.0  
         marker.text = 'Heading: {:.2f} deg'.format(self.heading_deg)
         self.marker_publisher_.publish(marker)
 
