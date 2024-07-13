@@ -21,8 +21,6 @@ class QrCodeDetect(Node):
         for result in qreader_results:
             if 'bbox_xyxy' in result:
                 x1, y1, x2, y2 = result['bbox_xyxy']
-
-                # Convert to integers
                 x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
 
                  # Draw lines for the bounding box
